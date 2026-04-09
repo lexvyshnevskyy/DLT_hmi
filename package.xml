@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>hmi</name>
+  <version>0.1.0</version>
+  <description>ROS 2 HMI serial bridge migrated from ROS 1.</description>
+  <maintainer email="lex.vyshnevskyy@gmail.com">Oleksii Vyshnevskyi</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- Custom interfaces expected to exist in the same workspace -->
+  <exec_depend>database</exec_depend>
+  <exec_depend>msgs</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
