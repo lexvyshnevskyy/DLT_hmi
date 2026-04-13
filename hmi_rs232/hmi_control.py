@@ -270,7 +270,7 @@ class HmiControlNode(Node, HmiProtocolMixin):
         try:
             payload = json.dumps({'cmd': command, **params_dict})
             request = Query.Request()
-            request.request = payload
+            request.query = payload
             future = self.database_client.call_async(request)
             response = self._wait_for_future(future, timeout_sec=5.0)
             return json.loads(response.response)
