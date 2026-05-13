@@ -12,6 +12,8 @@ def generate_launch_description():
     ads_topic_arg = DeclareLaunchArgument('ads_topic', default_value='/ads1256')
     measure_topic_arg = DeclareLaunchArgument('measure_topic', default_value='/measure_device')
     database_service_arg = DeclareLaunchArgument('database_service', default_value='/database/query')
+    database_required_arg = DeclareLaunchArgument('database_required', default_value='true')
+    database_wait_timeout_arg = DeclareLaunchArgument('database_wait_timeout_sec', default_value='15.0')
 
     node = Node(
         package='hmi',
@@ -26,6 +28,8 @@ def generate_launch_description():
             'ads_topic': LaunchConfiguration('ads_topic'),
             'measure_topic': LaunchConfiguration('measure_topic'),
             'database_service': LaunchConfiguration('database_service'),
+            'database_required': LaunchConfiguration('database_required'),
+            'database_wait_timeout_sec': LaunchConfiguration('database_wait_timeout_sec'),
         }],
     )
 
@@ -37,5 +41,7 @@ def generate_launch_description():
         ads_topic_arg,
         measure_topic_arg,
         database_service_arg,
+        database_required_arg,
+        database_wait_timeout_arg,
         node,
     ])

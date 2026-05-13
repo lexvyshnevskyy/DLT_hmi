@@ -154,6 +154,8 @@ class HmiControlNode(Node, HmiProtocolMixin):
         self.declare_parameter('ads_topic', '/ads1256')
         self.declare_parameter('measure_topic', '/measure_device')
         self.declare_parameter('database_service', '/database/query')
+        self.declare_parameter('database_required', True)
+        self.declare_parameter('database_wait_timeout_sec', 15.0)
 
         self.endpoint = self.get_parameter('endpoint').get_parameter_value().string_value
         self.publish_rate = self.get_parameter('publish_rate').value
@@ -162,6 +164,8 @@ class HmiControlNode(Node, HmiProtocolMixin):
         self.ads_topic = self.get_parameter('ads_topic').get_parameter_value().string_value
         self.measure_topic = self.get_parameter('measure_topic').get_parameter_value().string_value
         self.database_service_name = self.get_parameter('database_service').get_parameter_value().string_value
+        self.database_required = bool(self.get_parameter('database_required').value)
+        self.database_wait_timeout_sec = float(self.get_parameter('database_wait_timeout_sec').value)
 
         self.ads_msg = None
         self.ads_data_ready = None
@@ -190,8 +194,7 @@ class HmiControlNode(Node, HmiProtocolMixin):
         self.measure_sub = self.create_subscription(E720, self.measure_topic, self._e720_callback, 10)
 
         self.database_client = self.create_client(Query, self.database_service_name)
-        while not self.database_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info(f'Waiting for database service: {self.database_service_name}')
+        self._wait_for_database_service_or_fail()
 
         self._sender_timer = self.create_timer(0.25, self._controller_sender_once)
         self._waveform_timer = self.create_timer(1.0, self._waveform)
@@ -266,30 +269,87 @@ class HmiControlNode(Node, HmiProtocolMixin):
         self.measure.msg = msg
         self.measure.data_ready = self.measure.process_screen(self.page, self.measure.parse_message())
 
+    def _wait_for_database_service_or_fail(self) -> bool:
+        """Wait for the critical database service without blocking Ctrl+C forever.
+
+        If database_required is true, HMI fails fast after database_wait_timeout_sec.
+        That is better for systemd: the service exits, logs the real dependency
+        problem, and can be restarted after Database comes up.
+        """
+        deadline = None
+        if self.database_wait_timeout_sec > 0.0:
+            deadline = time.monotonic() + self.database_wait_timeout_sec
+
+        last_log_sec = 0
+        while rclpy.ok() and not self._stop_event.is_set():
+            if self.database_client.service_is_ready():
+                self.get_logger().info(f'Database service is ready: {self.database_service_name}')
+                return True
+
+            # Short wait keeps SIGINT/Ctrl+C responsive.
+            self.database_client.wait_for_service(timeout_sec=0.1)
+
+            now = time.monotonic()
+            if int(now) != last_log_sec:
+                last_log_sec = int(now)
+                self.get_logger().info(f'Waiting for database service: {self.database_service_name}')
+
+            if deadline is not None and now >= deadline:
+                message = (
+                    f'Database service is not available after '
+                    f'{self.database_wait_timeout_sec:.1f}s: {self.database_service_name}'
+                )
+                if self.database_required:
+                    self.get_logger().error(message)
+                    raise RuntimeError(message)
+                self.get_logger().warning(message + ' HMI will start in degraded mode.')
+                return False
+
+        raise KeyboardInterrupt()
+
+    def _database_available(self) -> bool:
+        try:
+            if self.database_client.service_is_ready():
+                return True
+            return bool(self.database_client.wait_for_service(timeout_sec=0.05))
+        except Exception:
+            return False
+
     def _process_database_query(self, command: str, params_dict: dict):
+        if not self._database_available():
+            message = f'Database service is not available: {self.database_service_name}'
+            self.get_logger().error(message)
+            return {'result': 'Error', 'error': message}
+
         try:
             payload = json.dumps({'cmd': command, **params_dict})
             request = Query.Request()
             request.query = payload
             future = self.database_client.call_async(request)
             response = self._wait_for_future(future, timeout_sec=5.0)
+            if response is None:
+                return {'result': 'Error', 'error': 'Database service returned no response'}
             return json.loads(response.response)
         except TimeoutError:
             self.get_logger().error('Database service call timed out')
-            return {}
+            return {'result': 'Error', 'error': 'Database service call timed out'}
         except json.JSONDecodeError as exc:
             self.get_logger().error(f'Invalid JSON response: {exc}')
-            return {}
+            return {'result': 'Error', 'error': f'Invalid JSON response: {exc}'}
         except Exception as exc:
             self.get_logger().error(f'Database service call failed: {exc}')
-            return {}
+            return {'result': 'Error', 'error': str(exc)}
 
     def _wait_for_future(self, future: Future, timeout_sec: float):
         start = time.monotonic()
-        while rclpy.ok() and not future.done():
+        while rclpy.ok() and not self._stop_event.is_set() and not future.done():
             if time.monotonic() - start > timeout_sec:
                 raise TimeoutError()
             time.sleep(0.01)
+
+        if not rclpy.ok() or self._stop_event.is_set():
+            raise KeyboardInterrupt()
+
         return future.result()
 
     @staticmethod
