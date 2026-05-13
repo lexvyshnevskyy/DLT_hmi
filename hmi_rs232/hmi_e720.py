@@ -7,23 +7,24 @@ class E720View:
     def parse_message(self):
         if self.msg is None:
             return {}
+
         return {
-            'OffSet': self._field(self.msg, 'OffSet'),
-            'Level': self._field(self.msg, 'Level'),
-            'Freq': self._field(self.msg, 'Freq'),
-            'Freq10': self._field(self.msg, 'Freq10'),
-            'Frequency': self._field(self.msg, 'Frequency'),
-            'Limit': self._field(self.msg, 'Limit'),
-            'ImParam': self._field(self.msg, 'ImParam'),
-            'SecParam': self._field(self.msg, 'SecParam'),
-            'SecValue': self._field(self.msg, 'SecValue'),
-            'SecValue10': self._field(self.msg, 'SecValue10'),
-            'SecondValue': self._field(self.msg, 'SecondValue'),
-            'ImValue': self._field(self.msg, 'ImValue'),
-            'ImValue10': self._field(self.msg, 'ImValue10'),
-            'FirstValue': self._field(self.msg, 'FirstValue'),
-            'OnChange': self._field(self.msg, 'OnChange'),
-            'TimeStamp': self._field(self.msg, 'TimeStamp'),
+            'OffSet': self._field(self.msg, 'offset'),
+            'Level': self._field(self.msg, 'level'),
+            'Freq': self._field(self.msg, 'freq'),
+            'Freq10': self._field(self.msg, 'freq10'),
+            'Frequency': self._field(self.msg, 'frequency'),
+            'Limit': self._field(self.msg, 'limit'),
+            'ImParam': self._field(self.msg, 'imparam'),
+            'SecParam': self._field(self.msg, 'secparam'),
+            'SecValue': self._field(self.msg, 'secvalue'),
+            'SecValue10': self._field(self.msg, 'secvalue10'),
+            'SecondValue': self._field(self.msg, 'secondvalue'),
+            'ImValue': self._field(self.msg, 'imvalue'),
+            'ImValue10': self._field(self.msg, 'imvalue10'),
+            'FirstValue': self._field(self.msg, 'firstvalue'),
+            'OnChange': self._field(self.msg, 'onchange'),
+            'TimeStamp': self._field(self.msg, 'timestamp'),
         }
 
     @staticmethod
@@ -34,29 +35,33 @@ class E720View:
     def process_screen(self, screen: bytes = b'0', data=None):
         if data is None:
             data = {}
+
         if screen == b'0':
             return {
-                'e71.txt': data.get('ImParam', 0),
+                'e71.txt': data.get('ImParam', ''),
                 'e72.txt': data.get('FirstValue', 0),
-                'e73.txt': data.get('SecParam', 0),
+                'e73.txt': data.get('SecParam', ''),
                 'e74.txt': data.get('SecondValue', 0),
             }
+
         if screen == b'2':
             return {
-                'e71.txt': data.get('ImParam', 0),
-                'e72.txt': self.format_frequency(data.get('FirstValue', 0), ''),
+                'e71.txt': data.get('ImParam', ''),
+                'e72.txt': self.format_frequency(float(data.get('FirstValue', 0) or 0), ''),
                 'e73.txt': '',
-                'e74.txt': data.get('SecParam', 0),
-                'e75.txt': round(data.get('SecondValue', 0), 4),
-                'e77.txt': data.get('Limit', 0),
-                'e78.txt': f"{data.get('Level', 0):.2f}v",
-                'e79.txt': self.format_frequency(data.get('Frequency', 0), 'Hz'),
-                'e7a.txt': f"{data.get('OffSet', 0):.2f}v",
+                'e74.txt': data.get('SecParam', ''),
+                'e75.txt': round(float(data.get('SecondValue', 0) or 0), 4),
+                'e77.txt': data.get('Limit', ''),
+                'e78.txt': f"{float(data.get('Level', 0) or 0):.2f}v",
+                'e79.txt': self.format_frequency(float(data.get('Frequency', 0) or 0), 'Hz'),
+                'e7a.txt': f"{float(data.get('OffSet', 0) or 0):.2f}v",
             }
+
         return {}
 
     @staticmethod
     def format_frequency(value, dimension):
+        value = float(value or 0)
         if value < 1000:
             return f"{value:.0f} {dimension}"
         if value < 1000000:
